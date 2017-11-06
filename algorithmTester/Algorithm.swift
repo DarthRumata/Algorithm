@@ -19,20 +19,17 @@ enum Command: String {
   case endLoop = "]"
 }
 
-var counter = 0
-
 func parse(code: String) -> [Command] {
   return code.characters.map { Command(rawValue: String($0))! }
 }
 
-var memory = [Double: UInt8]()
-var memoryPointer: Double = 0
+var memoryCount = 1
+var memoryPointer = UnsafeMutablePointer<UInt8>.allocate(capacity: memoryCount)
+var currentMemoryPosition = 0
 var outputSequence: [UnicodeScalar] = []
 var inputSequence: [UInt8]!
 var loopPointers = [Int]()
 var commandPointer = 0
-var topIndex: Double = 0
-var bottomIndex: Double = 0
 
 func brainLuck(_ code: String, input: String) -> String {
   defer {
@@ -47,16 +44,10 @@ func brainLuck(_ code: String, input: String) -> String {
   }
 }
 
-func createCell() {
-  memory[memoryPointer] = 0
-}
-
 func cleanUp() {
-  topIndex = 0
-  bottomIndex = 0
-  memoryPointer = 0
-  memory.removeAll()
-  memory[0] = 0
+  currentMemoryPosition = 0
+  memoryPointer.initialize(to: 0, count: memoryCount)
+  memoryCount = 1
   outputSequence.removeAll()
   loopPointers.removeAll()
   commandPointer = 0
@@ -74,42 +65,37 @@ func execute(sequence: [Command]) {
 func execute(command: Command) -> Bool {
   switch command {
   case .moveForward:
-    memoryPointer += 1
-    if memoryPointer > topIndex {
-      createCell()
-      topIndex = memoryPointer
+    currentMemoryPosition += 1
+    if currentMemoryPosition >= memoryCount {
+      memoryCount = currentMemoryPosition + 1
     }
 
   case .moveBackward:
-    memoryPointer -= 1
-    if memoryPointer < bottomIndex {
-      createCell()
-      bottomIndex = memoryPointer
-    }
+    currentMemoryPosition -= 1
 
   case .increaseValue:
-    let value = memory[memoryPointer]!
-    memory[memoryPointer] = value &+ 1
+    let value = memoryPointer[currentMemoryPosition]
+    memoryPointer[currentMemoryPosition] = value &+ 1
 
   case .decreaseValue:
-    let value = memory[memoryPointer]!
-    memory[memoryPointer] = value &- 1
+    let value = memoryPointer[currentMemoryPosition]
+    memoryPointer[currentMemoryPosition] = value &- 1
 
   case .readValue:
     let inputScalar = inputSequence.popLast()!
-    memory[memoryPointer] = inputScalar
+    memoryPointer[currentMemoryPosition] = inputScalar
 
   case .writeValue:
-    outputSequence.append(UnicodeScalar(memory[memoryPointer]!))
+    outputSequence.append(UnicodeScalar(memoryPointer[currentMemoryPosition]))
 
   case .startLoop:
-    if memory[memoryPointer]! != 0 {
+    if memoryPointer[currentMemoryPosition] != 0 {
       loopPointers.append(commandPointer)
     }
 
   case .endLoop:
     let loopPointer = loopPointers.popLast()!
-    if memory[memoryPointer]! != 0 {
+    if memoryPointer[currentMemoryPosition] != 0 {
       commandPointer = loopPointer
       return false
     }
